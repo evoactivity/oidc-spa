@@ -53,6 +53,88 @@ if (fs.existsSync(distDirPath_root)) {
     fs.rmSync(distDirPath_root, { recursive: true });
 }
 
+{
+    // ember is special, we need to build it with babel
+
+    const tsConfigFile = pathJoin(projectDirPath, "tsconfig.ember.json");
+    const babelFile = pathJoin(projectDirPath, "babel.config.json");
+
+    // create tsconfig.ember.json for ember tooling
+    const existingTsConfig = JSON.parse(
+        fs.readFileSync(pathJoin(projectDirPath, "tsconfig.json")).toString("utf8")
+    );
+    fs.writeFileSync(
+        tsConfigFile,
+        JSON.stringify(
+            {
+                include: ["src/ember.ts"],
+                compilerOptions: {
+                    ...existingTsConfig.compilerOptions
+                }
+            },
+            null,
+            2
+        )
+    );
+
+    // create babel.config.json for ember build
+    fs.writeFileSync(
+        babelFile,
+        JSON.stringify(
+            {
+                plugins: [
+                    [
+                        "@babel/plugin-transform-typescript",
+                        {
+                            allExtensions: true,
+                            allowDeclareFields: true,
+                            onlyRemoveTypeImports: true
+                        }
+                    ],
+                    [
+                        "module:decorator-transforms",
+                        {
+                            runtime: {
+                                import: "decorator-transforms/runtime-esm"
+                            }
+                        }
+                    ]
+                ],
+                sourceMaps: true,
+                generatorOpts: {
+                    compact: false
+                }
+            },
+            null,
+            2
+        )
+    );
+
+    run(
+        `npx babel --config-file ${babelFile} ${pathJoin(
+            projectDirPath,
+            "src",
+            "ember.ts"
+        )} --out-dir ${pathJoin(distDirPath_root, "esm")} --extensions .ts`
+    );
+
+    run(
+        `npx tsc --project ${tsConfigFile} --outDir ${pathJoin(
+            cacheDirPath,
+            "ember"
+        )} --declaration --emitDeclarationOnly`
+    );
+
+    fs.cpSync(
+        pathJoin(cacheDirPath, "ember", "ember.d.ts"),
+        pathJoin(distDirPath_root, "esm", "ember.d.ts")
+    );
+
+    fs.rmSync(tsConfigFile);
+    fs.rmSync(babelFile);
+    fs.rmSync(pathJoin(cacheDirPath, "ember"), { recursive: true });
+}
+
 for (const targetFormat of ["cjs", "esm"] as const) {
     const distDirPath = (() => {
         switch (targetFormat) {
@@ -93,12 +175,14 @@ for (const targetFormat of ["cjs", "esm"] as const) {
                             case "cjs":
                                 return [
                                     "angular.ts",
+                                    "ember.ts",
                                     "tanstack-start",
                                     pathJoin("tools", "inferIsViteDev.ts")
                                 ];
                             case "esm":
                                 return [
                                     "vite-plugin",
+                                    "ember.ts",
                                     pathJoin("vendor", "build-runtime"),
                                     pathJoin("tools", "getThisCodebaseRootDirPath_cjs.ts")
                                 ];

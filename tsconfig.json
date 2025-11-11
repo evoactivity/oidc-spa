@@ -14,7 +14,9 @@
         "jsx": "react-jsx",
         "noFallthroughCasesInSwitch": true,
         "skipLibCheck": true,
-        "module": "es2020"
+        "module": "es2020",
+        "experimentalDecorators": true,
+        "types": ["ember-source/types", "@types/node"]
     },
     "include": ["src"]
 }
